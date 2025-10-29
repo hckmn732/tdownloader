@@ -1,0 +1,47 @@
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*.local
+web/.env
+web/.env.*.local
+
+# Node and build artifacts
+node_modules/
+web/node_modules/
+web/.next/
+web/.next/cache/
+web/out/
+web/.turbo/
+web/.swc/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Downloads and runtime data
+downloads/
+web/downloads/
+
+# Prisma local databases
+web/prisma/*.db
+web/prisma/*.sqlite*
+web/prisma/db.sqlite*
+web/prisma/db.sqlite-journal
+
+# OS swap
+*.swp
+*.swo
+
+# Misc
+aria2.log
+
+# Keep aria2 binaries (do not ignore aria2-bin/)
+# Keep prisma migrations
+
