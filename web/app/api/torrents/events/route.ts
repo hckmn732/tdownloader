@@ -30,7 +30,6 @@ export async function GET() {
         stopped = true;
         clearInterval(interval);
         try {
-          // @ts-expect-error: close may exist in some runtimes
           controller.close?.();
         } catch {}
       };

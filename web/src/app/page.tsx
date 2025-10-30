@@ -42,10 +42,11 @@ export default function Home() {
     es.onmessage = (ev) => {
       try {
         const payload = JSON.parse(ev.data) as { type: string; items?: any[] };
-        if (payload.type === "torrent.updated" && Array.isArray(payload.items)) {
+        if (payload.type === "torrent.updated") {
+          const updates = Array.isArray(payload.items) ? payload.items : [];
           setItems((prev) => {
             const map = new Map(prev.map((p) => [p.id, p] as const));
-            for (const u of payload.items) {
+            for (const u of updates) {
               const existing = map.get(u.id);
               if (!existing) continue;
               const updated: TorrentItem = {
