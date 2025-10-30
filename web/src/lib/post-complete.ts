@@ -6,6 +6,9 @@ import { Aria2Client } from "@/lib/aria2/client";
 import { prisma } from "@/lib/prisma";
 import * as fs from "fs/promises";
 import * as path from "node:path";
+import * as os from "node:os";
+import { runPostProcessingAgent } from "./agents/postProcessingAgent";
+import { execSync } from "node:child_process";
 
 /**
  * Processes a completed torrent: removes .aria2 sidecar files and calls AI endpoint if configured
@@ -66,30 +69,40 @@ export async function handlePostComplete(torrentId: string, gid: string): Promis
     console.log(`Could not fetch files from aria2 for ${torrentId} (may be purged):`, (e as Error).message);
   }
 
-  // Call AI endpoint if configured
-  const aiEndpoint = process.env.AI_ENDPOINT_URL;
-  if (aiEndpoint) {
-    try {
-      const payload = {
-        torrentId,
-        gid,
-        when: new Date().toISOString(),
-        name: dbTorrent.originalName ?? null,
-        magnet: dbTorrent.magnetUri ?? null,
-        infoHash: dbTorrent.infoHash ?? null,
-      };
-      
-      const res = await fetch(aiEndpoint, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      
-      if (!res.ok) {
-        console.error(`[AI] HTTP ${res.status} for torrent ${torrentId}`);
+  const downloadsBaseDir = process.env.DOWNLOADS_BASE_DIR ?? "/downloads";
+  const targetParent = process.env.ASSETS_BASE_DIR ?? "/media/library";
+  const sourcePath = `${downloadsBaseDir}/${dbTorrent.originalName ?? null}`;
+
+  // detect automatically the os with os library 
+  let osPlatform = os.platform();
+
+
+  const payloadAI = {
+    name: dbTorrent.originalName ?? null,
+    sourcePath: sourcePath,
+    targetParent: targetParent,
+    os: osPlatform
+  }
+  console.log(`Payload: ${JSON.stringify(payloadAI)}`);
+  // Replace this with runPostProcessingAgent call and extract the payload from the response and execute the actions
+  const result = await runPostProcessingAgent(JSON.stringify(payloadAI));
+  const payload = JSON.parse(result);
+  const actions = payload.actions;
+  const agentShell: string | undefined = payload.shell;
+
+
+  if (Array.isArray(actions) && actions.length > 0) {  
+    for (const action of actions) {
+      console.log(`Executing action: ${action}`);
+      try {
+        if (agentShell === "powershell") {
+          execSync(action, { shell: "powershell.exe" });
+        } else {
+          execSync(action);
+        }
+      } catch (e) {
+        console.error(`Error executing action: ${action}`, e);
       }
-    } catch (e) {
-      console.error(`[AI] Call failed for torrent ${torrentId}:`, e);
     }
   }
 

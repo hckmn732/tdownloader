@@ -40,3 +40,4 @@ aria2c \
 echo "Aria2 lancé en arrière-plan. Downloads: $DOWNLOAD_DIR"
 echo "Consultez les logs: tail -f $DOWNLOAD_DIR/aria2.log"
 
+
