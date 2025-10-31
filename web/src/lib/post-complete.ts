@@ -8,7 +8,7 @@ import * as fs from "fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import { runPostProcessingAgent } from "./agents/postProcessingAgent";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
 /**
  * Processes a completed torrent: removes .aria2 sidecar files and calls AI endpoint if configured
@@ -95,10 +95,14 @@ export async function handlePostComplete(torrentId: string, gid: string): Promis
     for (const action of actions) {
       console.log(`Executing action: ${action}`);
       try {
-        if (agentShell === "powershell") {
-          execSync(action, { shell: "powershell.exe" });
-        } else {
-          execSync(action);
+        const shellOption = agentShell === "powershell" ? { shell: "powershell.exe" } : { shell: true };
+        // Use spawnSync with inherited stdio to avoid buffering large outputs which can cause EPIPE
+        const result = spawnSync(action, {
+          ...shellOption,
+          stdio: "inherit",
+        });
+        if (result.status !== 0) {
+          throw new Error(`Command failed with exit code ${result.status}`);
         }
       } catch (e) {
         console.error(`Error executing action: ${action}`, e);
