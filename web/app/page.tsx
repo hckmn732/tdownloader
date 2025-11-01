@@ -66,18 +66,29 @@ export default function Home() {
   }, []);
 
   const onSubmit = useCallback(async () => {
-    const magnets = input
+    const lines = input
       .split(/\r?\n/)
       .map((s) => s.trim())
-      .filter((s) => s.startsWith("magnet:"));
-    if (magnets.length === 0) return;
+      .filter((s) => s.length > 0);
+    
+    const magnets = lines.filter((s) => s.startsWith("magnet:"));
+    const urls = lines.filter((s) => s.startsWith("http://") || s.startsWith("https://"));
+    
+    if (magnets.length === 0 && urls.length === 0) {
+      setError("Veuillez entrer au moins un lien magnet ou HTTP valide");
+      return;
+    }
+    
     setIsSubmitting(true);
     setError(null);
     try {
       const res = await fetch("/api/torrents", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ magnets }),
+        body: JSON.stringify({ 
+          ...(magnets.length > 0 && { magnets }),
+          ...(urls.length > 0 && { urls })
+        }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -294,7 +305,7 @@ export default function Home() {
 					<div className="flex items-center justify-between gap-4">
 						<div>
 							<h1 className="text-2xl font-semibold">Torrent Dashboard</h1>
-							<p className="text-sm text-zinc-600 dark:text-zinc-400">Ajoutez des magnets, suivez la progression en direct.</p>
+							<p className="text-sm text-zinc-600 dark:text-zinc-400">Ajoutez des magnets ou des liens HTTP, suivez la progression en direct.</p>
 						</div>
 						<div className="flex items-center gap-2">
 							<span className="text-xs text-zinc-500">Aria2</span>
@@ -307,11 +318,11 @@ export default function Home() {
 				</header>
 
         <section className="mb-8 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800 bg-white dark:bg-black">
-          <label className="mb-2 block text-sm font-medium">Magnets (un par ligne)</label>
+          <label className="mb-2 block text-sm font-medium">Magnets ou liens HTTP (un par ligne)</label>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="magnet:?xt=urn:btih:..."
+            placeholder="magnet:?xt=urn:btih:...&#10;http://a-2.1fichier.com/c1179238645"
             className="w-full rounded-md border border-zinc-300 bg-transparent p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-400 dark:border-zinc-700"
             rows={4}
           />
@@ -355,7 +366,7 @@ export default function Home() {
             )}
           </div>
           
-          {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
+          {error && <div className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</div>}
         </section>
 
         <section className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-black shadow-sm p-4">

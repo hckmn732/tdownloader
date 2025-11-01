@@ -1,5 +1,5 @@
 /**
- * Handles post-completion processing for torrents: removes .aria2 sidecars and calls AI endpoint
+ * Handles post-completion processing for torrents and HTTP downloads: removes .aria2 sidecars and calls AI endpoint
  */
 
 import { Aria2Client } from "@/lib/aria2/client";
@@ -11,7 +11,7 @@ import { runPostProcessingAgent } from "./agents/postProcessingAgent";
 import { spawnSync } from "node:child_process";
 
 /**
- * Processes a completed torrent: removes .aria2 sidecar files and calls AI endpoint if configured
+ * Processes a completed download (torrent or HTTP): removes .aria2 sidecar files and calls AI endpoint if configured
  * Returns true if processing was successful, false if already handled or failed
  */
 export async function handlePostComplete(torrentId: string, gid: string): Promise<boolean> {
@@ -91,6 +91,8 @@ export async function handlePostComplete(torrentId: string, gid: string): Promis
   const agentShell: string | undefined = payload.shell;
 
 
+  // log result
+  console.log(`Result: ${JSON.stringify(result)}`);
   if (Array.isArray(actions) && actions.length > 0) {  
     for (const action of actions) {
       console.log(`Executing action: ${action}`);

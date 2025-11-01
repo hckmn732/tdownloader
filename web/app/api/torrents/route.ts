@@ -91,21 +91,56 @@ export async function POST(req: NextRequest) {
         })
       );
     } else {
-      // Handle JSON request (magnets)
-      const body = (await req.json()) as { magnets?: string[]; applyAi?: boolean };
+      // Handle JSON request (magnets and/or HTTP URLs)
+      const body = (await req.json()) as { magnets?: string[]; urls?: string[]; applyAi?: boolean };
       const magnets = (body.magnets ?? []).filter((m) => typeof m === "string" && m.startsWith("magnet:"));
-      if (magnets.length === 0) {
-        return Response.json({ error: "No valid magnets provided" }, { status: 400 });
+      const httpUrls = (body.urls ?? []).filter((u) => typeof u === "string" && (u.startsWith("http://") || u.startsWith("https://")));
+      
+      if (magnets.length === 0 && httpUrls.length === 0) {
+        return Response.json({ error: "No valid magnets or HTTP URLs provided" }, { status: 400 });
       }
 
-      const results = await aria2.addMagnets(magnets);
+      // Process magnets
+      if (magnets.length > 0) {
+        const results = await aria2.addMagnets(magnets);
+        const magnetCreated = await Promise.all(
+          results.map(async (r) => {
+            const infoHash = r.magnet ? extractInfoHash(r.magnet) : null;
+            if (!r.gid) {
+              // Si pas de GID, créer quand même une entrée avec erreur
+              // Mais d'abord, tenter de retrouver un existant par infoHash
+              if (infoHash) {
+                const existingByHash = await prisma.torrent.findFirst({
+                  where: {
+                    OR: [
+                      { infoHash },
+                      { magnetUri: { contains: infoHash } },
+                    ],
+                  },
+                });
+                if (existingByHash) {
+                  return existingByHash;
+                }
+              }
 
-      created = await Promise.all(
-        results.map(async (r) => {
-          const infoHash = r.magnet ? extractInfoHash(r.magnet) : null;
-          if (!r.gid) {
-            // Si pas de GID, créer quand même une entrée avec erreur
-            // Mais d'abord, tenter de retrouver un existant par infoHash
+              return prisma.torrent.create({
+                data: {
+                  type: "magnet",
+                  magnetUri: r.magnet,
+                  infoHash: infoHash ?? undefined,
+                  originalName: r.magnet,
+                  status: "failed",
+                  progress: 0,
+                  bytesDone: BigInt(0),
+                  bytesTotal: BigInt(0),
+                  downloadSpeed: BigInt(0),
+                  errorMessage: r.error ?? "Failed to add magnet",
+                  createdAt: now,
+                },
+              });
+            }
+
+            // Vérifier doublons par infoHash en priorité, puis par GID
             if (infoHash) {
               const existingByHash = await prisma.torrent.findFirst({
                 where: {
@@ -116,8 +151,20 @@ export async function POST(req: NextRequest) {
                 },
               });
               if (existingByHash) {
+                // Mettre à jour le GID s'il manquait
+                if (!existingByHash.aria2Gid) {
+                  return prisma.torrent.update({
+                    where: { id: existingByHash.id },
+                    data: { aria2Gid: r.gid, status: r.error ? "failed" : "downloading" },
+                  });
+                }
                 return existingByHash;
               }
+            }
+
+            const existingByGid = await prisma.torrent.findFirst({ where: { aria2Gid: r.gid } });
+            if (existingByGid) {
+              return existingByGid;
             }
 
             return prisma.torrent.create({
@@ -126,62 +173,96 @@ export async function POST(req: NextRequest) {
                 magnetUri: r.magnet,
                 infoHash: infoHash ?? undefined,
                 originalName: r.magnet,
-                status: "failed",
+                status: r.error ? "failed" : "downloading",
                 progress: 0,
                 bytesDone: BigInt(0),
                 bytesTotal: BigInt(0),
                 downloadSpeed: BigInt(0),
-                errorMessage: r.error ?? "Failed to add magnet",
+                aria2Gid: r.gid,
+                errorMessage: r.error ?? null,
                 createdAt: now,
               },
             });
-          }
+          })
+        );
+        created.push(...magnetCreated);
+      }
 
-          // Vérifier doublons par infoHash en priorité, puis par GID
-          if (infoHash) {
-            const existingByHash = await prisma.torrent.findFirst({
+      // Process HTTP URLs
+      if (httpUrls.length > 0) {
+        const results = await aria2.addHttpUrls(httpUrls);
+        const httpCreated = await Promise.all(
+          results.map(async (r) => {
+            if (!r.gid) {
+              // Vérifier si l'URL existe déjà
+              const existingByUrl = await prisma.torrent.findFirst({
+                where: {
+                  type: "http",
+                  magnetUri: r.url,
+                },
+              });
+              if (existingByUrl) {
+                return existingByUrl;
+              }
+
+              return prisma.torrent.create({
+                data: {
+                  type: "http",
+                  magnetUri: r.url,
+                  originalName: r.url,
+                  status: "failed",
+                  progress: 0,
+                  bytesDone: BigInt(0),
+                  bytesTotal: BigInt(0),
+                  downloadSpeed: BigInt(0),
+                  errorMessage: r.error ?? "Failed to add HTTP URL",
+                  createdAt: now,
+                },
+              });
+            }
+
+            // Vérifier doublons par URL, puis par GID
+            const existingByUrl = await prisma.torrent.findFirst({
               where: {
-                OR: [
-                  { infoHash },
-                  { magnetUri: { contains: infoHash } },
-                ],
+                type: "http",
+                magnetUri: r.url,
               },
             });
-            if (existingByHash) {
+            if (existingByUrl) {
               // Mettre à jour le GID s'il manquait
-              if (!existingByHash.aria2Gid) {
+              if (!existingByUrl.aria2Gid) {
                 return prisma.torrent.update({
-                  where: { id: existingByHash.id },
+                  where: { id: existingByUrl.id },
                   data: { aria2Gid: r.gid, status: r.error ? "failed" : "downloading" },
                 });
               }
-              return existingByHash;
+              return existingByUrl;
             }
-          }
 
-          const existingByGid = await prisma.torrent.findFirst({ where: { aria2Gid: r.gid } });
-          if (existingByGid) {
-            return existingByGid;
-          }
+            const existingByGid = await prisma.torrent.findFirst({ where: { aria2Gid: r.gid } });
+            if (existingByGid) {
+              return existingByGid;
+            }
 
-          return prisma.torrent.create({
-            data: {
-              type: "magnet",
-              magnetUri: r.magnet,
-              infoHash: infoHash ?? undefined,
-              originalName: r.magnet,
-              status: r.error ? "failed" : "downloading",
-              progress: 0,
-              bytesDone: BigInt(0),
-              bytesTotal: BigInt(0),
-              downloadSpeed: BigInt(0),
-              aria2Gid: r.gid,
-              errorMessage: r.error ?? null,
-              createdAt: now,
-            },
-          });
-        })
-      );
+            return prisma.torrent.create({
+              data: {
+                type: "http",
+                magnetUri: r.url,
+                originalName: r.url,
+                status: r.error ? "failed" : "downloading",
+                progress: 0,
+                bytesDone: BigInt(0),
+                bytesTotal: BigInt(0),
+                downloadSpeed: BigInt(0),
+                aria2Gid: r.gid,
+                errorMessage: r.error ?? null,
+                createdAt: now,
+              },
+            });
+          })
+        );
+        created.push(...httpCreated);
+      }
     }
 
     const dto = created.map(torrentToDTO);

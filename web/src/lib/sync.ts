@@ -17,6 +17,10 @@ type Aria2Status = Record<string, unknown> & {
       name?: string;
     };
   };
+  files?: Array<{
+    path?: string;
+    uris?: Array<{ uri?: string }>;
+  }>;
   errorMessage?: string;
   errorCode?: string;
 };
@@ -71,6 +75,7 @@ async function syncOneStatus(
       "errorMessage",
       "errorCode",
       "bittorrent",
+      "files",
     ])) as Aria2Status;
 
     // If this is the magnet metadata task, aria2 creates a new GID in `followedBy`.
@@ -91,6 +96,7 @@ async function syncOneStatus(
           "errorMessage",
           "errorCode",
           "bittorrent",
+          "files",
         ])) as Aria2Status;
         gid = nextGid; // switch to the real download GID
       } catch {
@@ -106,8 +112,23 @@ async function syncOneStatus(
     const progress = bytesTotal > 0 ? (bytesDone / bytesTotal) * 100 : 0;
     const aria2Status = String(s.status ?? "unknown");
     const prismaStatus = mapAria2Status(aria2Status);
-    // Extract torrent name from bittorrent.info.name
-    const torrentName = s.bittorrent?.info?.name ? String(s.bittorrent.info.name) : undefined;
+    
+    // Extract name: from bittorrent.info.name for torrents, or from files[0].path for HTTP downloads
+    let torrentName: string | undefined;
+    if (s.bittorrent?.info?.name) {
+      torrentName = String(s.bittorrent.info.name);
+    } else if (Array.isArray(s.files) && s.files.length > 0) {
+      // For HTTP downloads, extract filename from the first file's path
+      const firstFile = s.files[0];
+      if (firstFile?.path) {
+        const filePath = String(firstFile.path);
+        // Extract just the filename from the path
+        const fileName = filePath.split(/[/\\]/).pop() || filePath;
+        if (fileName && !fileName.startsWith("[METADATA]")) {
+          torrentName = fileName;
+        }
+      }
+    }
     const isAllocating = aria2Status === "active" && bytesTotal > 0 && bytesDone === 0 && downloadSpeed === 0 && connections === 0;
     // Heuristic: checksum verification phase (aria2 doesn't expose explicit status)
     const isChecking = aria2Status === "active" && downloadSpeed === 0 && connections === 0 && bytesDone > 0 && verifiedLength < bytesDone;

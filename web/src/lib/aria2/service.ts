@@ -49,5 +49,23 @@ export class Aria2Service {
     );
     return results;
   }
+
+  async addHttpUrls(urls: string[]): Promise<{
+    gid?: string;
+    url: string;
+    error?: string;
+  }[]> {
+    const results = await Promise.all(
+      urls.map(async (url) => {
+        try {
+          const gid = await this.client.addUri([url]);
+          return { gid, url };
+        } catch (e) {
+          return { url, error: (e as Error).message };
+        }
+      })
+    );
+    return results;
+  }
 }
 
