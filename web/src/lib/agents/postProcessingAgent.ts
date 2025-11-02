@@ -13,12 +13,7 @@ const webSearchPreview = webSearchTool({
     city: undefined,
     timezone: undefined
   },
-  searchContextSize: "medium",
-  filters: {
-    allowedDomains: [
-      "www.themoviedb.org"
-    ]
-  }
+  searchContextSize: "medium"
 });
 
 function loadInstructions(): string {
