@@ -1,0 +1,11 @@
+﻿PORT=ing0
+DOWNLOADS_BASE_DIR=../downloads
+ASSETS_BASE_DIR=../downloads
+AI_ENDPOINT_URL=https://webhook.site/0d4ae81d-b2be-4e1e-89bc-71172e358f3b
+AI_API_KEY=changeme
+ARIA2_RPC_SECRET=changeme
+ARIA2_RPC_URL=http://127.0.0.1:6800/jsonrpc
+MAX_PARALLEL_DOWNLOADS=3
+NODE_ENV=development
+OPENAI_API_KEY=sk-proj-p3IrMb-xxx
+DATABASE_URL=file:./db.sqlite

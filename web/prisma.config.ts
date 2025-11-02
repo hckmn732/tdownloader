@@ -8,6 +8,6 @@ export default defineConfig({
   },
   engine: "classic",
   datasource: {
-    url: "file:./db.sqlite",
+    url: process.env.DATABASE_URL ?? "file:../../db.sqlite",
   },
 });
