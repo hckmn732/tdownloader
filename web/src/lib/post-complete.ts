@@ -84,34 +84,25 @@ export async function handlePostComplete(torrentId: string, gid: string): Promis
     os: osPlatform
   }
   console.log(`Payload: ${JSON.stringify(payloadAI)}`);
-  // Replace this with runPostProcessingAgent call and extract the payload from the response and execute the actions
-  const result = await runPostProcessingAgent(JSON.stringify(payloadAI));
-  const payload = JSON.parse(result);
-  const actions = payload.actions;
-  const agentShell: string | undefined = payload.shell;
-
-
-  // log result
-  console.log(`Result: ${JSON.stringify(result)}`);
-  if (Array.isArray(actions) && actions.length > 0) {  
-    for (const action of actions) {
-      console.log(`Executing action: ${action}`);
-      try {
-        const shellOption = agentShell === "powershell" ? { shell: "powershell.exe" } : { shell: true };
-        // Use spawnSync with inherited stdio to avoid buffering large outputs which can cause EPIPE
-        const result = spawnSync(action, {
-          ...shellOption,
-          stdio: "inherit",
-        });
-        if (result.status !== 0) {
-          throw new Error(`Command failed with exit code ${result.status}`);
-        }
-      } catch (e) {
-        console.error(`Error executing action: ${action}`, e);
-      }
-    }
+    
+  let sourcePathAI = sourcePath;
+  let targetPathAI = targetParent + "/tmp/" + dbTorrent.originalName ;
+  let osAI = "linux"; // default to linux
+  try {  
+    const result = await runPostProcessingAgent(JSON.stringify(payloadAI));
+    const payloadAIParsed = JSON.parse(result) as any;
+    sourcePathAI = payloadAIParsed.sourcePath;
+    targetPathAI = payloadAIParsed.targetPath;
+    osAI = payloadAIParsed.os;
+  } catch (e) {
+    console.error(`Error executing AI: ${e}`);
   }
+  console.log(`--------------[ AI POST PROCESSING ]------------------`);
+  console.log(`Source Path: ${sourcePath}`);
+  console.log(`Target Path AI: ${targetPathAI}`);
+  console.log(`OS AI: ${osAI}`);
 
-  return true;
+  // use spawnSync to call rclone move with follwing option --progress --transfers=8 --checkers=16 --s3-upload-concurrency=8 --s3-chunk-size=64M --buffer-size=64M --fast-list --delete-empty-src-dirs --low-level-retries=10 --retries=2 --retries-sleep=10s
+  const result = spawnSync("rclone", ["move", sourcePathAI, targetPathAI, "--progress", "--transfers=8", "--checkers=16", "--s3-upload-concurrency=8", "--s3-chunk-size=512M", "--buffer-size=256M", "--fast-list", "--delete-empty-src-dirs", "--low-level-retries=10", "--retries=2", "--retries-sleep=10s"]);
+  return result.status === 0;
 }
-
