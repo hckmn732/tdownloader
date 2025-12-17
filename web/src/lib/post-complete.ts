@@ -102,7 +102,21 @@ export async function handlePostComplete(torrentId: string, gid: string): Promis
   console.log(`Target Path AI: ${targetPathAI}`);
   console.log(`OS AI: ${osAI}`);
 
-  // use spawnSync to call rclone move with follwing option --progress --transfers=8 --checkers=16 --s3-upload-concurrency=8 --s3-chunk-size=64M --buffer-size=64M --fast-list --delete-empty-src-dirs --low-level-retries=10 --retries=2 --retries-sleep=10s
-  const result = spawnSync("rclone", ["move", sourcePathAI, targetPathAI, "--progress", "--transfers=8", "--checkers=16", "--s3-upload-concurrency=8", "--s3-chunk-size=512M", "--buffer-size=256M", "--fast-list", "--delete-empty-src-dirs", "--low-level-retries=10", "--retries=2", "--retries-sleep=10s"]);
+  // use spawnSync to call rclone move with lighter options suitable for small VMs (1 CPU / 2 GB RAM)
+  const result = spawnSync("rclone", [
+    "move",
+    sourcePathAI,
+    targetPathAI,
+    "--transfers=2",
+    "--checkers=4",
+    "--s3-upload-concurrency=2",
+    "--s3-chunk-size=32M",
+    "--buffer-size=16M",
+    "--fast-list",
+    "--delete-empty-src-dirs",
+    "--low-level-retries=10",
+    "--retries=3",
+    "--retries-sleep=10s",
+  ]);
   return result.status === 0;
 }
